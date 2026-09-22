@@ -45,9 +45,10 @@ export const ZCODE_BUILD_COMMIT_ID_ENV = "ZCODE_BUILD_COMMIT_ID" as const;
 export const RUNTIME_ZCODE_DEBUG =
   typeof process !== "undefined" ? process.env.ZCODE_DEBUG : undefined;
 
-// 恢复原因：写死 false 会让运行时已配置的数仓/ARMS 永远空转。
-// 功能保持可用；实际出网由各出口的运行时端点检查决定，未配置不上报。
-export const ZCODE_TELEMETRY_ENABLED: boolean = true;
+// 关闭原因：本仓库运行环境不配置遥测上报端点，遥测出网一律停用（ARMS RUM 与数仓两条通道均不初始化）。
+// 上游恢复 true 是为「运行时已配置端点」的官方环境保留功能；本仓库显式 false。
+// 各消费方（SDK 启动、setUser、稳定性 context、数仓事件）均有 false 分支直接短路，无副作用。
+export const ZCODE_TELEMETRY_ENABLED: boolean = false;
 
 /** 数仓事件上报端点：由运行时环境变量提供，未配置即停用，构建产物不内嵌。 */
 export const ZCODE_TELEMETRY_REPORT_ENDPOINT =
