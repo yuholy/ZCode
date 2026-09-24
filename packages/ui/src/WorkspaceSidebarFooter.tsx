@@ -3,7 +3,6 @@ import type { Locale, UserInfo } from "@zcode/shared";
 import { memo, useCallback, useEffect, useState } from "react";
 import {
   DesktopCommandIds,
-  TID_LOGIN_MENU_ITEM,
   TID_LOGIN_TRIGGER,
   TID_LOGOUT_BUTTON,
   TID_TASK_SETTINGS_BUTTON,
@@ -29,7 +28,6 @@ import {
   PencilRuler,
   Globe,
   Loader2,
-  LogInIcon,
   LogOut,
   Maximize,
   Palette,
@@ -70,13 +68,15 @@ function getSidebarProfileName(user?: UserInfo | null): string {
 
 function getSidebarProfileBadge(
   user: UserInfo | null | undefined,
-  formatMessage: ReturnType<typeof useZCodeIntl>["intl"]["formatMessage"],
+  _formatMessage: ReturnType<typeof useZCodeIntl>["intl"]["formatMessage"],
 ): string {
   if (user) {
     return getSidebarProfileName(user);
   }
 
-  return formatMessage({ id: "sidebar.profile.notLoggedIn" });
+  // 本 fork 修改原因：纯 API Key 客户端、不使用账号体系，未登录时不应展示「连接使用」
+  // 登录引导文案，回退为中性产品名。
+  return "ZCode";
 }
 
 function getAvatarFallbackText(user: UserInfo | null | undefined): string {
@@ -92,7 +92,7 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   onSettingsButtonClick,
   onUsageClick,
   onUpgradeClick,
-  onLogin,
+  onLogin: _onLogin,
   onLogout,
   settingsButtonMode = "settings",
   user,
@@ -349,15 +349,8 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
               onUsageClick={usageButtonClick}
               onUpgradeClick={onUpgradeClick}
             />
-            {onLogin && !user ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={onLogin} data-testid={TID_LOGIN_MENU_ITEM}>
-                  <LogInIcon className="size-4" />
-                  {intl.formatMessage({ id: "app.login" })}
-                </DropdownMenuItem>
-              </>
-            ) : null}
+            {/* 本 fork 修改原因：不使用账号体系，已移除未登录时的「连接使用」登录菜单项；
+                如需恢复，参照上游在 onLogin && !user 时渲染 TID_LOGIN_MENU_ITEM 菜单项。 */}
             {onLogout ? (
               <>
                 <DropdownMenuSeparator />
