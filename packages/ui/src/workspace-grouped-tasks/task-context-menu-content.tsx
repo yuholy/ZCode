@@ -1,4 +1,5 @@
 import type { ZCodeTaskMeta } from "@zcode/shared";
+import { ZCODE_FORK_ENABLE_FEEDBACK_CENTER } from "@zcode/shared";
 import {
   ContextMenuContent,
   ContextMenuItem,
@@ -173,10 +174,15 @@ export function GroupedTaskContextMenuContent({
       >
         {intl.formatMessage({ id: "appHeader.copySessionId" })}
       </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem onSelect={onOpenTaskFeedback}>
-        {intl.formatMessage({ id: "taskList.feedback" })}
-      </ContextMenuItem>
+      {/* fork 策略：问题上报入口整组隐藏（ZCODE_FORK_ENABLE_FEEDBACK_CENTER）。 */}
+      {ZCODE_FORK_ENABLE_FEEDBACK_CENTER ? (
+        <>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={onOpenTaskFeedback}>
+            {intl.formatMessage({ id: "taskList.feedback" })}
+          </ContextMenuItem>
+        </>
+      ) : null}
     </ContextMenuContent>
   );
 }

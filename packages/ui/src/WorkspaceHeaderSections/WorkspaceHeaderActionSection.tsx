@@ -2,6 +2,7 @@ import { WorkspaceEditorButtonGroup } from "@/WorkspaceEditorButtonGroup.js";
 import { WorkspaceSidePaneToggleButton } from "@/WorkspaceSidePaneToggleButton.js";
 import { WorkspaceTerminalToggleButton } from "@/WorkspaceTerminalToggleButton.js";
 import { cn } from "@/components/lib/utils.js";
+import { ZCODE_FORK_ENABLE_CONVERSATION_SHARE } from "@zcode/shared";
 import type { WorkspaceHeaderActionSectionProps } from "@/WorkspaceHeaderSections/shared.js";
 import { WorkspaceHelpMenuButton } from "@/WorkspaceHelpMenuButton.js";
 import { ConversationShareMenu } from "@/ConversationShareMenu.js";
@@ -48,7 +49,9 @@ export function WorkspaceHeaderActionSection({
         />
       ) : null}
       {/* 分享发布接口依赖登录态；未登录时隐藏入口，避免用户打开后只能得到鉴权失败。 */}
-      {activeTaskId && user && isDesktop !== false ? (
+      {/* fork 策略：会话分享（发布）整体关闭，且不依赖登录态——分享会把会话与选中文件
+          内容整份上传到官方站点，纯 API Key 私有 fork 不用这条通道。 */}
+      {activeTaskId && user && isDesktop !== false && ZCODE_FORK_ENABLE_CONVERSATION_SHARE ? (
         <ConversationShareMenu
           taskId={activeTaskId}
           useWindowsCaptionSpacing={useWindowsCaptionSpacing}

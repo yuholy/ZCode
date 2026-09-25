@@ -1,4 +1,4 @@
-import { TID_V4_TASK_OPEN_IN_SPLIT } from "@zcode/shared";
+import { TID_V4_TASK_OPEN_IN_SPLIT, ZCODE_FORK_ENABLE_FEEDBACK_CENTER } from "@zcode/shared";
 
 interface TaskActionMenuItemProps {
   children: React.ReactNode;
@@ -196,7 +196,7 @@ export function TaskActionMenuContent({
           </Item>
         </>
       ) : null}
-      {onOpenTaskFeedback ? (
+      {onOpenTaskFeedback && ZCODE_FORK_ENABLE_FEEDBACK_CENTER ? (
         <>
           <Separator />
           <Item disabled={taskTargetActionsDisabled} onSelect={onOpenTaskFeedback}>

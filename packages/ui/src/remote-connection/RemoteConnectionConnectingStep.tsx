@@ -2,6 +2,7 @@ import { redactFeedbackText } from "@zcode/shared";
 import { useCallback, useEffect, useRef } from "react";
 import { AlertTriangleIcon, LoaderIcon } from "lucide-react";
 import { TID_SSH_ERROR, type RemoteTarget } from "@zcode/shared";
+import { ZCODE_FORK_ENABLE_FEEDBACK_CENTER } from "@zcode/shared";
 import { cn } from "@/components/lib/utils.js";
 import { Button } from "@/components/ui/button.js";
 import type { RemoteConnectionLogEntry } from "@/hooks/useRemoteConnectionLogs.js";
@@ -132,17 +133,20 @@ export function RemoteConnectionConnectingStep({
           >
             <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
             <span className="min-w-0 flex-1">{errorMessage}</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void handleOpenFeedback();
-              }}
-              className="h-7 shrink-0 border-warning/30 text-warning hover:bg-warning/10"
-            >
-              {intl.formatMessage({ id: "remoteConnection.feedback" })}
-            </Button>
+            {/* fork 策略：问题上报整体关闭，连接失败页只保留重试，不留死按钮。 */}
+            {ZCODE_FORK_ENABLE_FEEDBACK_CENTER ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void handleOpenFeedback();
+                }}
+                className="h-7 shrink-0 border-warning/30 text-warning hover:bg-warning/10"
+              >
+                {intl.formatMessage({ id: "remoteConnection.feedback" })}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>

@@ -12,6 +12,7 @@ import {
   TID_CHAT_ERROR_DETAILS_BUTTON,
   TID_CHAT_ERROR_BANNER,
   TID_CHAT_ERROR_HOOK_ICON,
+  ZCODE_FORK_ENABLE_FEEDBACK_CENTER,
 } from "@zcode/shared";
 import { AnchorIcon, CopyIcon, InfoIcon, RocketIcon, SettingsIcon, X } from "lucide-react";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
@@ -270,7 +271,7 @@ export function ChatErrorBanner({
           </>
         ) : null}
 
-        {!modelConfigMissing ? (
+        {!modelConfigMissing && ZCODE_FORK_ENABLE_FEEDBACK_CENTER ? (
           <Button
             type="button"
             variant="outline"

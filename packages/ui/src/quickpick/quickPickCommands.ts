@@ -1,3 +1,5 @@
+import { ZCODE_FORK_ENABLE_FEEDBACK_CENTER } from "@zcode/shared";
+
 export type QuickPickCommandIcon =
   | "book"
   | "browser"
@@ -229,24 +231,28 @@ export function createQuickPickCommands({
     },
   ];
 
-  commands.push({
-    id: "feedback",
-    sectionId: "app",
-    titleId: "quickPick.command.feedback",
-    icon: "feedback",
-    keywords: [
-      "feedback",
-      "issue",
-      "support",
-      "tickets",
-      "问题上报",
-      "问题反馈",
-      "反馈",
-      "我的反馈",
-      "工单",
-    ],
-    run: handlers.openFeedback,
-  });
+  // fork 策略：问题上报命令不再注册（ZCODE_FORK_ENABLE_FEEDBACK_CENTER）。
+  // 只删命令项而不是留一个 run 为空的空壳，避免命令面板里出现搜得到、按下去没反应的结果。
+  if (ZCODE_FORK_ENABLE_FEEDBACK_CENTER) {
+    commands.push({
+      id: "feedback",
+      sectionId: "app",
+      titleId: "quickPick.command.feedback",
+      icon: "feedback",
+      keywords: [
+        "feedback",
+        "issue",
+        "support",
+        "tickets",
+        "问题上报",
+        "问题反馈",
+        "反馈",
+        "我的反馈",
+        "工单",
+      ],
+      run: handlers.openFeedback,
+    });
+  }
 
   if (canOpenCommunity) {
     commands.push({

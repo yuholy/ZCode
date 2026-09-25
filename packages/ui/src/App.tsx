@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { GitChangeSourceId, WorkspacePurpose } from "@zcode/shared";
+import { ZCODE_FORK_ENABLE_FEEDBACK_CENTER } from "@zcode/shared";
 import { useZCodeStore } from "@/store/StoreProvider.js";
 import { getVisibleTaskMetas, useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import { useTaskQueryCacheStore } from "@/store/taskQueryCacheStore.js";
@@ -662,6 +663,12 @@ export function App({
   const openFeedbackTickets = useFeedbackStore((state) => state.openTickets);
   const isLoggedIn = Boolean(user);
   const handleOpenFeedback = useCallback(() => {
+    // fork 策略：问题上报整体关闭（ZCODE_FORK_ENABLE_FEEDBACK_CENTER）。
+    // 这里必须一起挡住主进程的 openFeedback 命令——那条路径会先拉一次远端帮助配置，
+    // 再回发 OpenFeedbackDialog IPC；即使反馈中心不挂载，按下去仍会出网。
+    if (!ZCODE_FORK_ENABLE_FEEDBACK_CENTER) {
+      return;
+    }
     void platform.openFeedback();
   }, [platform]);
 
@@ -1121,7 +1128,11 @@ export function App({
       />
       {/* 反馈是应用级能力，必须固定走本机 base host；SSH session 连接中或断开时，
           workspace-scoped services 会切成断连代理，不能让反馈提交跟随远程 session 失效。 */}
-      <FeedbackHost feedbackService={baseFeedbackService} platform={platform} />
+      {/* fork 策略：问题上报（含截图与日志归档上传）整体关闭，反馈中心不挂载。
+          提交链路只由 FeedbackCenter 内部驱动，不挂载即无法上传，这里是唯一choke point。 */}
+      {ZCODE_FORK_ENABLE_FEEDBACK_CENTER ? (
+        <FeedbackHost feedbackService={baseFeedbackService} platform={platform} />
+      ) : null}
       <WorkspaceShellLayout
         services={services}
         workspaceReadOnlyReason={workspaceReadOnlyReason}

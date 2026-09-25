@@ -8,6 +8,7 @@ import type {
 import {
   TID_SETTINGS_ASK_USER_QUESTION_AUTO_RESOLUTION_SWITCH,
   TID_SETTINGS_NATIVE_SEARCH_SWITCH,
+  ZCODE_FORK_ENABLE_UPDATE_CHANNELS,
 } from "@zcode/shared";
 import { useState, useCallback, useEffect } from "react";
 import type { IPlatformService } from "@zcode/shared";
@@ -574,6 +575,13 @@ export function GeneralSectionContent({
                 />
               }
             />
+          </>
+        ) : null}
+        {/* fork 策略：更新通道已关闭（ZCODE_FORK_ENABLE_UPDATE_CHANNELS），这两个开关不再产生
+            任何行为，显示出来只会误导。故在此另起一个片段单独开关，state / handler 全保留原样
+            （改动面最小），不删除上游代码。 */}
+        {isDesktop && ZCODE_FORK_ENABLE_UPDATE_CHANNELS ? (
+          <>
             <SettingsRow
               label={intl.formatMessage({ id: "settings.receivePreviewUpdates" })}
               description={intl.formatMessage({

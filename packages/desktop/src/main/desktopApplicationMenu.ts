@@ -5,6 +5,7 @@ import {
   getDesktopMenuMessage,
   isValidShortcutBinding,
   ZCODE_ENV,
+  ZCODE_FORK_ENABLE_FEEDBACK_CENTER,
   ZCODE_PRODUCT_FLAVOR,
   type DesktopCommandId,
   type Locale,
@@ -333,10 +334,16 @@ function buildApplicationMenuTemplate(options: {
           click: () => void options.executeDesktopCommand(DesktopCommandIds.OpenResourceManager),
         },
         { type: "separator" as const },
-        {
-          label: getLabel(desktopMenuMessageIds.helpFeedback),
-          click: () => void options.executeDesktopCommand(DesktopCommandIds.OpenFeedback),
-        },
+        // fork 策略：原生菜单里的「问题上报」同样受 ZCODE_FORK_ENABLE_FEEDBACK_CENTER 管辖，
+        // 否则 Windows/Linux 上会留下一个只剩壳的入口。
+        ...(ZCODE_FORK_ENABLE_FEEDBACK_CENTER
+          ? [
+              {
+                label: getLabel(desktopMenuMessageIds.helpFeedback),
+                click: () => void options.executeDesktopCommand(DesktopCommandIds.OpenFeedback),
+              },
+            ]
+          : []),
         {
           label: getLabel(desktopMenuMessageIds.helpExportLogs),
           click: () => void options.executeDesktopCommand(DesktopCommandIds.ExportLogs),
