@@ -1355,6 +1355,14 @@ export function refreshAutoUpdaterReleaseChannel(
 ) {
   const nextChannel: ElectronReleaseChannel = receivePreviewUpdates ? "preview" : "stable";
 
+  if (autoUpdaterDisabledForProductFlavor) {
+    // fork 策略关掉更新通道后，initAutoUpdater 不会执行 setFeedURL，但 electron-updater 仍会
+    // 回退到打包内置的 app-update.yml（=官方 feed）。用户切换「接收预览更新」会经
+    // index.ts 的 syncImmediateAppSettings 走到这里，必须在此拦住，否则开关即出网。
+    logger.info(`[auto-update] skip ${reason}: updater disabled for this product flavor`);
+    return;
+  }
+
   if (!canUseAutoUpdaterInCurrentRuntime()) {
     logger.info(`[auto-update] skip ${reason}: not packaged`);
     return;
