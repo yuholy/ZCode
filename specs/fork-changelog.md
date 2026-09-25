@@ -215,6 +215,30 @@ CLI 就会初始化 exporter，把 agent 的模型调用 trace/metrics 发出去
 
 ---
 
+### 2.9 `fix(distribution)`: 安装脚本校验归档 sha256
+
+**问题**：`scripts/build-zcode.mjs` 已经把 `sha256` 写进 `latest.json`，但生成的 `install.sh`
+（`scripts/zcode-distribution/installer.mjs` 的 `installScriptSource`）**完全没用它**
+—— 下载完直接 `tar -xzf`。CDN / DNS / 中间人可替换 tarball。
+
+**改动**：安装脚本从已拿到的 `latest.json` 里取 `sha256`（不需额外拉 `sha256.txt`），
+用 **node 现算**归档哈希（跨平台，不依赖 `sha256sum`/`shasum`），不匹配则 `exit 1` 并打印 expected/actual；
+`latest.json` 缺字段时直接拒绝安装；逃生口 `ZCODE_DIST_SKIP_SHA256=1`（打印警告）。
+
+**已声明的局限**：sha256 与归档**同源**，只能拦「归档被换但元数据没跟着换」与传输损坏，
+**不能**拦下整个源站被压陷。真正的防篡改需要对 sha256 本身签名并把公钥固化在安装脚本里（方案 P0-2 的可选加固）。
+
+**验证**（起本地假 release，把生成的 install.sh 真跑一遍）：
+
+| 场景                              | 结果                                                    |
+| --------------------------------- | ------------------------------------------------------- |
+| 归档正确                          | 安装成功，exit 0                                        |
+| 归档追加字节（篡改）              | `sha256 mismatch` + expected/actual，**exit 1**，未安装 |
+| 篡改 + `ZCODE_DIST_SKIP_SHA256=1` | 跳过校验并成功（逃生口生效）                            |
+| `latest.json` 缺 sha256 且未 skip | 拒绝安装（可操作提示），**exit 1**                      |
+
+仓库无脚本测试约定，因此以端到端手测作为验收（命令与输出见本次会话记录）。
+
 ## 3. 2026-09-24 ~ 09-25：隐私加固第一轮（4 个提交，本次会话之前）
 
 | 提交      | 内容                                                                                                             |
@@ -267,7 +291,8 @@ CLI 就会初始化 exporter，把 agent 的模型调用 trace/metrics 发出去
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | 凭据 KDF / sessions 明文 / 插件沙箱 / marketplace 签名 / 自签 CA / deviceMid 配置拉取 | 延后，全文见 `zcode-privacy-toolkit/modification-plan.md` |
 | ~~P0-4 server 鉴权~~                                                                  | **已做（2026-09-26）**，见 2.8                            |
-| P0-2 install.sh sha256 / P0-1 凭据 KDF / P0-3 ARMS UI 开关                            | 待做（P0 剩余三项）                                       |
+| ~~P0-2 install.sh sha256~~                                                            | **已做（2026-09-26）**，见 2.9                            |
+| P0-1 凭据 KDF / P0-3 ARMS UI 开关                                                     | 待做（P0 剩余两项）                                       |
 
 ### 2.8 `fix(server)`: trusted-host capability 通道默认关闭
 
