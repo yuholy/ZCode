@@ -16,7 +16,9 @@ export const serverRemoteInfoSchema = z.object({
   authRequired: z.boolean(),
   workspaces: z.array(serverRemoteWorkspaceInfoSchema),
   capabilities: z.object({
-    desktopContinuous: z.literal(true),
+    // P0-4：服务器在未设 authToken 且未显式 opt-in 时关闭 trusted-host 通道，
+    // 此时必须能报 false，不能再是字面量 true。
+    desktopContinuous: z.boolean(),
     websocketRpc: z.literal(true),
     // 旧 Server 缺少新增 dynamic event，必须先声明能力再订阅，避免异常打进对端读循环。
     processResourceTelemetry: z.boolean().optional(),

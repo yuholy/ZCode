@@ -137,6 +137,8 @@ interface HttpServerOptions {
   host?: string;
   authRequired?: boolean;
   authToken?: string;
+  /** 未设 authToken 时是否仍开放 trusted-host capability 通道（默认 false，需显式 opt-in）。 */
+  allowHostCapability?: boolean;
   spaFallback?: boolean;
   staticRoot?: string;
   workspaces?: ServerRemoteWorkspaceInfo[];
@@ -166,7 +168,10 @@ function resolveServerWorkspaces(options: HttpServerOptions): ServerRemoteWorksp
   ];
 }
 
-function createServerInfo(options: HttpServerOptions): ServerRemoteInfo {
+function createServerInfo(
+  options: HttpServerOptions,
+  trustedHostRoutesEnabled: boolean,
+): ServerRemoteInfo {
   return {
     serverId: resolveServerId(options),
     ...(options.name?.trim() || readTrimmedEnv("ZCODE_SERVER_NAME")
@@ -177,7 +182,8 @@ function createServerInfo(options: HttpServerOptions): ServerRemoteInfo {
     authRequired: options.authRequired ?? Boolean(readTrimmedEnv("ZCODE_SERVER_TOKEN")),
     workspaces: resolveServerWorkspaces(options),
     capabilities: {
-      desktopContinuous: true,
+      // 不能无条件声明：关闭该通道后仍报 true 会让客户端去试注定 404 的入口。
+      desktopContinuous: trustedHostRoutesEnabled,
       websocketRpc: true,
       processResourceTelemetry: true,
     },
@@ -305,6 +311,10 @@ export function createHttpServer(
   const hostCapabilities = createHostCapabilityStore();
 
   const authToken = options.authToken?.trim();
+  // 未设 authToken 时，/api/rpc-host-capability 对任何能连到本端口的人开放，拿到 capability 即可用
+  // desktop-continuous 通道接管 trusted host；而 `/api/` 与 `/ws/` 只受上面那段 token 中间件保护（无 token 即不生效）。
+  // 因此默认关闭该通道：设了 authToken 时行为不变（token 已保护），否则必须显式 opt-in。
+  const trustedHostRoutesEnabled = Boolean(authToken) || options.allowHostCapability === true;
   if (authToken) {
     app.use("*", async (c, next) => {
       const pathname = new URL(c.req.url).pathname;
@@ -317,8 +327,10 @@ export function createHttpServer(
     });
   }
 
-  app.get("/api/server-info", (c) => c.json(createServerInfo(options)));
-  app.post("/api/rpc-host-capability", (c) => c.json(hostCapabilities.issue()));
+  app.get("/api/server-info", (c) => c.json(createServerInfo(options, trustedHostRoutesEnabled)));
+  app.post("/api/rpc-host-capability", (c) =>
+    trustedHostRoutesEnabled ? c.json(hostCapabilities.issue()) : c.notFound(),
+  );
 
   // 普通 `/ws` 永远是 terminal-client；浏览器/任意客户端设置旧 mode header
   // 都不能再把自己提升为 trusted host。
@@ -337,6 +349,10 @@ export function createHttpServer(
     },
   }));
   app.use("/ws/host", async (c, next) => {
+    // 在中间件里前置返回 404，而不是条件注册路由：入口存在也拿不到 capability，且无法被“改注册处”意外打开。
+    if (!trustedHostRoutesEnabled) {
+      return c.notFound();
+    }
     const capability = c.req.header(ZCODE_RPC_HOST_CAPABILITY_HEADER);
     if (!hostCapabilities.consume(capability)) {
       return c.json({ error: "Invalid or expired host capability" }, 401);
