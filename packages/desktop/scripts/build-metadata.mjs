@@ -44,6 +44,10 @@ const workspaceDir = resolve(desktopDir, "../..");
 const metadataDir = resolve(desktopDir, "out/metadata");
 const metadataPath = resolve(metadataDir, "build-meta.json");
 
+// fork 标记：本仓库为 yuholy 私有 fork，所有构建产物（build-meta.json）内嵌此标识用于归属追溯。
+// 官方构建无此字段，可据此区分官方包与 fork 包。
+const FORK_ID = "yuholy";
+
 function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, "utf-8"));
 }
@@ -87,6 +91,7 @@ export function collectBuildMetadata() {
     appVersion: normalizeVersion(rootPackageJson.version),
     buildCommitId: resolveCommitId(),
     buildTime: new Date().toISOString(),
+    forkId: FORK_ID,
     electronBuilderVersion: resolveInstalledPackageVersion(
       "electron-builder",
       desktopPackageJson.devDependencies?.["electron-builder"],

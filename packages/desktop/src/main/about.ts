@@ -16,6 +16,8 @@ interface DesktopBuildMetadata {
   appVersion?: string;
   buildCommitId?: string;
   buildTime?: string;
+  /** fork 归属标记，由 build-meta.json 提供；官方构建无此字段。 */
+  forkId?: string;
   electronBuilderVersion?: string;
 }
 
@@ -23,6 +25,7 @@ interface AboutSnapshot {
   appVersion: string;
   buildCommitId: string;
   buildTime: string;
+  forkId: string;
   environment: string;
   electronVersion: string;
   electronBuilderVersion: string;
@@ -153,6 +156,8 @@ export function createAboutSnapshot(options: AboutSnapshotOptions = {}): AboutSn
     appVersion: normalizeValue(options.appVersion ?? buildMetadata?.appVersion ?? ZCODE_VERSION),
     buildCommitId: normalizeValue(buildMetadata?.buildCommitId ?? ZCODE_COMMIT),
     buildTime: normalizeValue(buildMetadata?.buildTime ?? ZCODE_BUILD_TIME),
+    // fork 标记：build-meta.json 缺失时（官方构建/老版本升级）回退为 fork 常量，与构建期写入值一致。
+    forkId: normalizeValue(buildMetadata?.forkId) || "yuholy",
     environment: normalizeValue(options.environment ?? ZCODE_ENV),
     electronVersion: normalizeValue(runtimeVersions.electron),
     electronBuilderVersion: resolveElectronBuilderVersion(buildMetadata),
@@ -172,6 +177,7 @@ export function formatAboutDetail(snapshot: AboutSnapshot): string {
   return [
     `Version: ${snapshot.appVersion}`,
     `Commit: ${snapshot.buildCommitId}`,
+    `Fork: ${snapshot.forkId}`,
     `Build Time: ${snapshot.buildTime}`,
     `Environment: ${snapshot.environment}`,
     "",
