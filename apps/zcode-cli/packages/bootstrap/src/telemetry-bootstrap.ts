@@ -1,4 +1,4 @@
-import { getCapturedZCodeAgentTelemetryEnv } from "@zcode/shared";
+import { getCapturedZCodeAgentTelemetryEnv, ZCODE_FORK_ENABLE_MODEL_TELEMETRY } from "@zcode/shared";
 import {
   prepareModelTelemetryEnv,
   shutdownPreparedModelTelemetry,
@@ -13,6 +13,12 @@ export async function prepareZCodeTelemetryEnv(
   env: NodeJS.ProcessEnv = process.env,
   options: PrepareModelTelemetryOptions = {},
 ): Promise<NodeJS.ProcessEnv> {
+  // fork 策略：模型遥测（OTLP trace/metrics）在私有 fork 中整体关闭。
+  // 这是 CLI 侧唯一的“准备遥测 Owner”入口；不准备 Owner，`createModelTelemetry` 就拿不到 owner，
+  // 只能返回 no-op（enabled:false）。因此即使用户环境里存在 OTEL_EXPORTER_OTLP_* 也不再外发。
+  if (!ZCODE_FORK_ENABLE_MODEL_TELEMETRY) {
+    return env;
+  }
   const prepared = await prepareModelTelemetryEnv({
     ...getCapturedZCodeAgentTelemetryEnv(),
     ...env,

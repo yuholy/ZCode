@@ -168,6 +168,11 @@ export const resolveBuildAliases = ({
     rootDirectory,
     "../../packages/shared/src/config-schema.ts",
   ),
+  // 出网流水账拦截器在 CLI 入口最先安装；esbuild alias 按前缀改写，必须精确声明。
+  "@zcode/shared/network-egress-instrumentation": resolve(
+    rootDirectory,
+    "../../packages/shared/src/networkEgressInstrumentation.ts",
+  ),
   "@zcode/shared/workspace-hook-discovery": resolve(
     rootDirectory,
     "../../packages/shared/src/workspace-hook-discovery.ts",
