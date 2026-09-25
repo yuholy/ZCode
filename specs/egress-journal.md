@@ -9,14 +9,14 @@
 
 ## 归属与边界
 
-| 项         | 决定                                                                                                         |
-| ---------- | ------------------------------------------------------------------------------------------------------------ |
-| 状态所有者 | 每个进程各自的 sink（`packages/shared/src/egressJournal.ts` 的 `createEgressJournal`），文件是唯一共享事实   |
-| 写入位置   | `${ZCODE_EGRESS_JOURNAL_DIR}` ?? `${ZCODE_HOME}` ?? `${HOME}/.zcode`，再拼 `/egress/egress-YYYY-MM-DD.jsonl` |
-| 格式       | append-only JSONL，一行一条记录（单次 `write` + `O_APPEND`，多进程可安全并发追加）                           |
-| 出网方向   | **不适用**：本通道自身只做 `fs` 写，不产生任何网络请求                                                       |
-| 覆盖范围   | 进程内 `globalThis.fetch` + `node:http.request/get` + `node:https.request/get`（含第三方库发起的请求）       |
-| 不覆盖     | 渲染进程（其流量多为本地 dev server 与 IPC）；原生 socket 直连（`net.connect`）；非 Node 进程                |
+| 项         | 决定                                                                                                                                                                                      |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 状态所有者 | 每个进程各自的 sink（`packages/shared/src/egressJournal.ts` 的 `createEgressJournal`），文件是唯一共享事实                                                                                |
+| 写入位置   | `${ZCODE_EGRESS_JOURNAL_DIR}` ?? `${ZCODE_HOME}` ?? `${HOME}/.zcode`，再拼 `/egress/egress-YYYY-MM-DD.jsonl`                                                                              |
+| 格式       | append-only JSONL，一行一条记录（单次 `write` + `O_APPEND`，多进程可安全并发追加）                                                                                                        |
+| 出网方向   | **不适用**：本通道自身只做 `fs` 写，不产生任何网络请求                                                                                                                                    |
+| 覆盖范围   | 进程内 `globalThis.fetch` + `node:http.request/get` + `node:https.request/get`（含第三方库发起的请求）                                                                                    |
+| 不覆盖     | **agent CLI 进程**（模型对话、WebFetch、MCP、插件下载 —— 见下方「为何不覆盖 agent 进程」）；渲染进程（其流量多为本地 dev server 与 IPC）；原生 socket 直连（`net.connect`）；非 Node 进程 |
 
 ## 记录内容（这是本通道的安全前提）
 
@@ -53,21 +53,32 @@
 
 ## 幂等与安装点
 
-`installNetworkEgressInstrumentation()` 幂等（重复调用返回 `false`），在三个进程启动早期各安装一次：
+`installNetworkEgressInstrumentation()` 幂等（重复调用返回 `false`），在两个进程启动早期各安装一次：
 
 | 进程         | 安装点                                                                          | 覆盖内容                                                 |
 | ------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | Desktop main | `packages/desktop/src/main/index.ts`（`desktopEarlyDataBaseDirBootstrap` 之后） | 配置拉取、更新 CDN、远端资源、浏览器数据导入             |
 | Local Host   | `packages/desktop/src/host/index.ts`                                            | bots（飞书/Telegram/微信）、反馈上传、会话分享、MCP 配置 |
-| Agent CLI    | `apps/zcode-cli/packages/bootstrap/src/index.ts`                                | **模型对话**、WebFetch、MCP、插件市场下载                |
+
+### 为何不覆盖 agent 进程（2026-09-26 决定）
+
+模型对话是**用户自配 provider 的既定、已知出网通道**，属于“我让它发的”，而不是需要事后发现的意外外发。
+把每次模型请求也记进来只会淹没信号：流水账的价值在于暴露**预期之外**的通道（配置拉取、bots、反馈、分享、CDN）。
+因此 **agent CLI 进程不安装拦截器**；CLI 的日志与流量审计依赖其它手段（见 `scripts/audit-zcode-egress.mjs`）。
+
+该决定附带一个已知盲区，写在这里以免日后误以为“流水账=全部出网”：
+**agent 进程自身发的 WebFetch / MCP HTTP / 插件市场下载不在流水账里**。若哪天需要这些，应单独评估，而不是直接给 agent 挂全局拦截。
 
 ## 验收场景
 
-1. 启动 Desktop（dev 或打包版）后，`~/.zcode/egress/egress-<today>.jsonl` 存在且包含启动期请求（如插件市场 / 配置拉取）。
-2. 发起一次模型对话后，journal 出现 `host` 为模型服务商、`path` 为接口路径的记录，且**不含** prompt 内容。
+1. 启动 Desktop（dev 或打包版）后，`~/.zcode/egress/egress-<today>.jsonl` 存在且包含启动期请求（如配置拉取 / 内置配置 CDN）。
+2. bots 或反馈等 Host 侧动作触发后，journal 出现对应 `host`/`path` 记录，且**不含**请求体与 header。
 3. 带 query 的请求（如 `/api/v1/client/configs?app_version=…&platform=…`）只留 `queryKeys`，无 value。
 4. 断开网络 / 目录不可写时，业务请求仍成功，journal 静默降级。
 5. `ZCODE_EGRESS_JOURNAL_DISABLED=1` 时不产生文件。
+6. **模型对话不应在 journal 产生任何记录**（agent 进程未安装拦截器）。
+7. 断开网络 / 目录不可写时，业务请求仍成功，journal 静默降级。
+8. `ZCODE_EGRESS_JOURNAL_DISABLED=1` 时不产生文件。
 
 ## 迁移边界
 
