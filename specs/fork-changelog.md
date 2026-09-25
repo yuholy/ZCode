@@ -263,13 +263,45 @@ CLI 就会初始化 exporter，把 agent 的模型调用 trace/metrics 发出去
 
 ### 6.2 未做（有意保留）
 
-| 项                                                                                                  | 状态                                                                                                          |
-| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| 凭据 KDF / sessions 明文 / 插件沙箱 / marketplace 签名 / server 鉴权 / 自签 CA / deviceMid 配置拉取 | 按第一批方案排序（P0-4 → P0-2 → P2-2 → P2-3 → P0-1）延后，全文见 `zcode-privacy-toolkit/modification-plan.md` |
-| 模型对话出网                                                                                        | 产品核心机制，代码层不可关闭；只做了「加记录」（流水账不覆盖）与「关模型遥测（OTLP）」                        |
-| 插件市场安装第三方代码 / MCP server 的 Node 权限                                                    | 属用户自划可信边界                                                                                            |
-| Claude Code 会话导入 / 外部 Agent 配置导入                                                          | 手动触发（首启引导走到迁移步骤会**自动扫** `~/.claude/projects`，纯本地、不外发），暂不隐藏                   |
-| Chrome Cookie / localStorage 导入                                                                   | 手动触发（`BrowserSettingsSection` 按钮），导入到本机 Electron 分区，不外发                                   |
+| 项                                                                                    | 状态                                                      |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 凭据 KDF / sessions 明文 / 插件沙箱 / marketplace 签名 / 自签 CA / deviceMid 配置拉取 | 延后，全文见 `zcode-privacy-toolkit/modification-plan.md` |
+| ~~P0-4 server 鉴权~~                                                                  | **已做（2026-09-26）**，见 2.8                            |
+| P0-2 install.sh sha256 / P0-1 凭据 KDF / P0-3 ARMS UI 开关                            | 待做（P0 剩余三项）                                       |
+
+### 2.8 `fix(server)`: trusted-host capability 通道默认关闭
+
+**问题**：`packages/server/src/http.ts`（web/独立 server）在未设 `ZCODE_SERVER_AUTH_TOKEN` 时，
+`POST /api/rpc-host-capability` 对任何能连到端口的人开放；拿到 capability 后即可用 `/ws/host`
+的 `desktop-continuous` 通道接管 trusted host。（`/api/` 与 `/ws/` 只受那段 token 中间件保护，无 token 即不生效。）
+
+**改动**：
+
+- `http.ts`：新增 `allowHostCapability` 选项，解析为 `trustedHostRoutesEnabled = Boolean(authToken) || allowHostCapability`；
+  `/api/rpc-host-capability` 与 `/ws/host` 中间件**前置返 404**（不条件注册路由，免得被“改注册处”意外打开）；
+  `createServerInfo` 的 `capabilities.desktopContinuous` 改为反映实情（否则客户端会去试注定 404 的入口）。
+- `entry-http.ts`：读 `ZCODE_SERVER_ALLOW_HOST_CAPABILITY=1` 显式 opt-in；默认关闭时启动打印可操作的警告。
+- `packages/shared/src/server-remote.ts`：`desktopContinuous` 从 `z.literal(true)` 放宽为 `z.boolean()`
+  （全仓无读取方，已验证）。
+
+**为何不只按方案“必须设 env”**：设了 authToken 时那两条路由本来就受 token 保护，强制要求新 env 会无必要地
+打断已鉴权的部署。因此只在「无 token 且未 opt-in」时关闭。
+
+**已验证的两个**：① **修的是 web/独立 server** —— 它与桌面 SSH 远程用的 `zcode-server.cjs`
+（`packages/zcode-server-cli/src/server-core/http.ts`）**是两套实现**；② 后者默认 `host ?? "127.0.0.1"`，
+其无鉴权 capability 正是桌面经 SSH 连接的方式，属设计边界（经 SSH 或远端 loopback 才能到达）。
+若今后把远端 server 绑到非 loopback（如 Docker 发布端口），需单独加固。
+
+**实测**（`ZCODE_HOME=/tmp/zcode-p04 PORT=3131 node dist/entry-http.js`）：
+
+| 配置                                             | POST /api/rpc-host-capability                                                               | server-info.capabilities.desktopContinuous | 启动警告 |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------ | -------- |
+| 默认（无 env）                                   | **404**                                                                                     | **false**                                  | 1 条     |
+| `ZCODE_SERVER_ALLOW_HOST_CAPABILITY=1`           | **200**（已发放）                                                                           | **true**                                   | 0 条     |
+| 模型对话出网                                     | 产品核心机制，代码层不可关闭；只做了「加记录」（流水账不覆盖）与「关模型遥测（OTLP）」      |
+| 插件市场安装第三方代码 / MCP server 的 Node 权限 | 属用户自划可信边界                                                                          |
+| Claude Code 会话导入 / 外部 Agent 配置导入       | 手动触发（首启引导走到迁移步骤会**自动扫** `~/.claude/projects`，纯本地、不外发），暂不隐藏 |
+| Chrome Cookie / localStorage 导入                | 手动触发（`BrowserSettingsSection` 按钮），导入到本机 Electron 分区，不外发                 |
 
 ### 6.3 部署与打包提醒
 
