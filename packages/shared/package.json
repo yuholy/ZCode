@@ -14,6 +14,8 @@
     "./model-config": "./src/model-config.ts",
     "./config-schema": "./src/config-schema.ts",
     "./node": "./src/node.ts",
+    "./egress-journal": "./src/egressJournal.ts",
+    "./network-egress-instrumentation": "./src/networkEgressInstrumentation.ts",
     "./zcodeEndpoint": "./src/zcodeEndpoint.ts",
     "./workspaceFileSearch": "./src/workspaceFileSearch.ts",
     "./workspaceFileEntriesCodec": "./src/workspaceFileEntriesCodec.ts",
