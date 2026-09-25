@@ -13,6 +13,7 @@
  * 2. main 进程只发送一次 init-local 初始化窗口 Host
  * 3. 后续远端 connect / scoped attachment 都由同一 Host 处理
  */
+import "./appHostEgressJournalBootstrap.js";
 import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
 import { randomUUID } from "node:crypto";
 import {
