@@ -313,9 +313,18 @@ CLI 就会初始化 exporter，把 agent 的模型调用 trace/metrics 发出去
 打断已鉴权的部署。因此只在「无 token 且未 opt-in」时关闭。
 
 **已验证的两个**：① **修的是 web/独立 server** —— 它与桌面 SSH 远程用的 `zcode-server.cjs`
-（`packages/zcode-server-cli/src/server-core/http.ts`）**是两套实现**；② 后者默认 `host ?? "127.0.0.1"`，
-其无鉴权 capability 正是桌面经 SSH 连接的方式，属设计边界（经 SSH 或远端 loopback 才能到达）。
-若今后把远端 server 绑到非 loopback（如 Docker 发布端口），需单独加固。
+（`packages/zcode-server-cli/src/server-core/http.ts`）**是两套实现**；② 后者在**绑定层就是 fail-closed 的**：
+
+```ts
+const host = options.host ?? "127.0.0.1";
+if (!isLoopbackHost(host)) {
+  // 当前只有本机/SSH 隧道入口，Core 尚未接入 token middleware；对外监听必须 fail-closed。
+  throw new Error(`Non-loopback host ${host} requires authentication before the server can listen`);
+}
+```
+
+所以它的无鉴权 capability 不是漏，而是只能在 loopback / SSH 隧道内到达；**不需要额外加固**。
+（最初笔者写成「若绑到非 loopback 需单独加固」是没读完这段代码的错读，此处更正。）
 
 **实测**（`ZCODE_HOME=/tmp/zcode-p04 PORT=3131 node dist/entry-http.js`）：
 
