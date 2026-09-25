@@ -72,6 +72,12 @@ export {
   normalizeZCodeEnv,
   normalizeZCodeProductFlavor,
 } from "./env.js";
+export {
+  ZCODE_FORK_ENABLE_CONVERSATION_SHARE,
+  ZCODE_FORK_ENABLE_FEEDBACK_CENTER,
+  ZCODE_FORK_ENABLE_MODEL_TELEMETRY,
+  ZCODE_FORK_ENABLE_UPDATE_CHANNELS,
+} from "./forkPolicy.js";
 export * from "./errors.js";
 export type { SessionCreateSource } from "./sessionCreateSource.js";
 export { resolveSafeEndpointHostname } from "./endpointHostname.js";
