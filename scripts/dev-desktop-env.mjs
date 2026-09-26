@@ -26,6 +26,12 @@ function run(command, args) {
         {
           ...process.env,
           ZCODE_ENV: requestedEnv,
+          // fork 策略：无论 test/production，开发态一律标记 ZCODE_RUNTIME_ENV=development。
+          // 原因：desktopRuntimeEnv.resolveRemoteAssetDirs() 只在 development 时传 mockCdnDir，
+          // 而 zcodeAgentDevDeploy.shouldUseDevelopmentAgentBundle() 也只认 development。
+          // 不设这个变量时 fallback=production → SSH 远程部署走官方 CDN，把 fork 构建的 agent
+          // 静默覆盖成官方版（2026-09-26 实测发生过）。
+          ZCODE_RUNTIME_ENV: "development",
           ZCODE_DESKTOP_AGENT_BYTECODE: agentBytecode ? "1" : "0",
         },
         process.execPath,

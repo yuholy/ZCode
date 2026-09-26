@@ -4,6 +4,7 @@ import {
   ZCODE_VERSION,
   formatLogPrefix,
   normalizeRemoteResourcePackageSelection,
+  resolveEffectiveRemoteAssetInstallMode,
   type RemoteAssetInstallMode,
   type RemoteResourcePackageId,
   type RemoteResourcePackageSelection,
@@ -139,6 +140,9 @@ export async function deployServer(
     return remoteManifestPromise;
   };
   let localManifestRefPromise: Promise<RemoteAssetManifestRef | null> | null = null;
+  // fork 策略：「远端服务器下载」被关闭时，把任何来源（含历史快照/持久化设置）的 remote-download
+  // 夹紧回本地下载后上传。UI 隐藏选项不构成约束，真正的执行点只在这里。
+  const assetInstallMode = resolveEffectiveRemoteAssetInstallMode(options?.assetInstallMode);
   const getLocalManifestRef = (): Promise<RemoteAssetManifestRef | null> => {
     // deploy lock 可能等待较久；在获锁前就启动 fresh manifest
     // 会让等待者用旧 SHA 覆盖新 owner 的部署。改为锁内首次需要时才固定，
@@ -149,7 +153,7 @@ export async function deployServer(
   const getManifestRefForComponents = async (
     componentIds?: string[],
   ): Promise<RemoteAssetManifestRef | null> => {
-    if (options?.assetInstallMode === "remote-download") {
+    if (assetInstallMode === "remote-download") {
       return getRemoteManifestRef();
     }
     const mockReleaseDir = resolveMockCdnReleaseDir(options?.mockCdnDir);
@@ -225,7 +229,7 @@ export async function deployServer(
       assetInstallMode: options?.assetInstallMode,
     },
     { log, logWarn },
-    options?.assetInstallMode === "remote-download" ? getRemoteManifestRef : null,
+    assetInstallMode === "remote-download" ? getRemoteManifestRef : null,
   );
   const getExpectedComponentVersion = async (componentId: string): Promise<string | null> => {
     if (installer.resolveComponentVersion) {

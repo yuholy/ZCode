@@ -56,3 +56,17 @@ export const ZCODE_FORK_ENABLE_CONVERSATION_SHARE: boolean = false;
  * 只影响可观测性，不改变任何对话行为；如需临时恢复，把此值改为 true。
  */
 export const ZCODE_FORK_ENABLE_MODEL_TELEMETRY: boolean = false;
+
+/**
+ * fork 策略开关（yuholy 私有 fork）：「远端服务器下载」资源安装模式。
+ *
+ * 该模式与「本地下载后上传」的差别不只是带宽：它读 **CDN 的 manifest**（`deploy.ts` 的
+ * `getManifestRefForComponents` / `createRemoteAssetInstaller`），而远端 agent 本体就属于该类
+ * 组件（manifest 里的 `glm`，就是 `zcode.cjs`）。选它意味着远端从官方 CDN 拉 **官方构建的 agent**
+ * —— 本 fork 的隐私加固（遥测关闭、模型遥测关闭、无反馈/分享入口、不扫盘）在远端全部失效。
+ *
+ * 关闭后：UI 不再展示该选项，持久化/历史快照里残留的 `remote-download` 也会在部署前被归一化为
+ * 「本地下载后上传」；远端仍拿到本机构建的 agent。schema 仍接受该字面量（旧设置向下兼容）。
+ * 如需临时恢复，把此值改为 true。
+ */
+export const ZCODE_FORK_ENABLE_REMOTE_ASSET_DOWNLOAD: boolean = false;

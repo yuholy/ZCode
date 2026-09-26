@@ -22,12 +22,13 @@
 
 `packages/shared/src/forkPolicy.ts`：
 
-| 开关                                   | 值      | 作用                                 |
-| -------------------------------------- | ------- | ------------------------------------ |
-| `ZCODE_FORK_ENABLE_UPDATE_CHANNELS`    | `false` | 关闭自动更新 + 远端强制升级 gate     |
-| `ZCODE_FORK_ENABLE_FEEDBACK_CENTER`    | `false` | 关闭问题上报（反馈中心）全部入口     |
-| `ZCODE_FORK_ENABLE_CONVERSATION_SHARE` | `false` | 关闭会话分享（发布侧）入口           |
-| `ZCODE_FORK_ENABLE_MODEL_TELEMETRY`    | `false` | 关闭模型遥测（OpenTelemetry / OTLP） |
+| 开关                                      | 值      | 作用                                                            |
+| ----------------------------------------- | ------- | --------------------------------------------------------------- |
+| `ZCODE_FORK_ENABLE_UPDATE_CHANNELS`       | `false` | 关闭自动更新 + 远端强制升级 gate                                |
+| `ZCODE_FORK_ENABLE_FEEDBACK_CENTER`       | `false` | 关闭问题上报（反馈中心）全部入口                                |
+| `ZCODE_FORK_ENABLE_CONVERSATION_SHARE`    | `false` | 关闭会话分享（发布侧）入口                                      |
+| `ZCODE_FORK_ENABLE_MODEL_TELEMETRY`       | `false` | 关闭模型遥测（OpenTelemetry / OTLP）                            |
+| `ZCODE_FORK_ENABLE_REMOTE_ASSET_DOWNLOAD` | `false` | 移除「远端服务器下载」资源安装模式（确保远端 agent 是本机构建） |
 
 另有历史开关（不在 forkPolicy，位于原位）：
 
@@ -238,6 +239,40 @@ CLI 就会初始化 exporter，把 agent 的模型调用 trace/metrics 发出去
 | `latest.json` 缺 sha256 且未 skip | 拒绝安装（可操作提示），**exit 1**                      |
 
 仓库无脚本测试约定，因此以端到端手测作为验收（命令与输出见本次会话记录）。
+
+### 2.10 `feat(remote)`: 移除「远端服务器下载」资源安装模式
+
+**为何要移除**：两种模式的差别不只是带宽，而是**远端 agent 本体归谁**：
+
+- `local-download-upload`（默认）：manifest 取本地（dev 态优先 `mock-cdn`），artifact 由**本机**下载后经 SSH 上传；
+  dev 态走 `deployDevelopmentZCodeAgentRuntime`，agent 用**仓库本地构建的 `zcode.cjs`**。
+- `remote-download`：manifest 取 **CDN**（`deploy.ts` 的 `getManifestRefForComponents`），artifact 由**远端自己**从 ZCode CDN 拉。
+  而 agent 本体就是 CDN 分发的一个组件（manifest 里的 `glm`，见 `zcodeAgentDeploy.ts` 注释「glm 组件里就是它（zcode.cjs）」）→
+  远端会拿到**官方构建的 agent**，本 fork 的全部隐私加固在远端失效。
+
+**改动**（保留上游代码，开关门控）：
+
+| 文件                               | 改动                                                                                                                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `forkPolicy.ts`                    | 新增 `ZCODE_FORK_ENABLE_REMOTE_ASSET_DOWNLOAD = false`                                                                                                                                                  |
+| `shared/remoteAssetInstallMode.ts` | 新增 `resolveEnabledRemoteAssetInstallModes()`（UI 用）与 `resolveEffectiveRemoteAssetInstallMode()`（夹紧用）；原有的 `normalizeRemoteAssetInstallMode` 语义**未动**（它全仓无调用方，不在执行路径上） |
+| `ui/RemoteConnectionFields.tsx`    | 选项列表改由开关决定；**只剩一种模式时整个选择项不渲染**（单选项 + 描述「另一种模式」会误导）                                                                                                           |
+| `server/remote/deploy.ts`          | 在部署决策入口把模式夹紧（两处 `remote-download` 判断改用夹紧后的值）                                                                                                                                   |
+
+**为何夹紧而不是只隐藏 UI**：UI 隐藏不构成约束 —— 历史快照（`remoteWorkspaceHistory`）与持久化设置里仍可能带 `remote-download`。
+schema（`validation.ts` / `validationAppSettings.ts` 的 `z.enum`）仍接受该字面量以保证旧设置向下兼容，真正的执行点只有部署入口。
+
+**验证**（`tsx` 直接跑共享模块）：
+
+```
+可用模式列表      : ["local-download-upload"]
+夹紧 remote-download      -> local-download-upload
+夹紧 local-download-upload -> local-download-upload
+夹紧 undefined / null     -> local-download-upload
+原 normalize 未改语义 : remote-download
+```
+
+**未做**：locale 里的 `ssh.assetInstallMode.remote-download` 文案保留（不再被渲染）。删它与上游同步冲突，无收益。
 
 ## 3. 2026-09-24 ~ 09-25：隐私加固第一轮（4 个提交，本次会话之前）
 

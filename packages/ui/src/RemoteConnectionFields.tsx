@@ -23,6 +23,7 @@ import {
   TID_WSL_DISTRO_SELECT,
   TID_WSL_USER_INPUT,
   isValidWslUser,
+  resolveEnabledRemoteAssetInstallModes,
 } from "@zcode/shared";
 import type { SSHAuthMethod } from "@/hooks/useRemoteConnectionForm.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
@@ -51,6 +52,8 @@ import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 
 const DEFAULT_WSL_DISTRO_VALUE = "__default_wsl_distro__";
 const NO_SSH_CONFIG_ALIAS_VALUE = "__ssh_config_alias_none__";
+// fork 策略：可用模式由 fork 开关决定；只剩一种时整个选择项不渲染（见下方 JSX 条件）。
+const ENABLED_ASSET_INSTALL_MODES = resolveEnabledRemoteAssetInstallModes();
 
 function formatSshConfigAliasSummary(aliasOption: SSHConfigAliasOption): string {
   const host = aliasOption.host?.trim() || aliasOption.alias;
@@ -479,39 +482,42 @@ export function RemoteConnectionFields({
             </div>
           )}
 
-          <div>
-            <label className="mb-1 block text-ui-base text-foreground-subtle">
-              {intl.formatMessage({ id: "ssh.assetInstallMode" })}
-            </label>
-            <div className="inline-flex w-full max-w-md flex-col items-stretch rounded-lg border border-input-border bg-input p-[3px] sm:w-fit sm:flex-row sm:items-center">
-              {(["local-download-upload", "remote-download"] as const).map((value) => {
-                const selected = assetInstallMode === value;
+          {/* fork 策略：只剩一种可用模式时隐藏整个选项——单选项加上描述「另一种模式」的说明只会误导。 */}
+          {ENABLED_ASSET_INSTALL_MODES.length > 1 ? (
+            <div>
+              <label className="mb-1 block text-ui-base text-foreground-subtle">
+                {intl.formatMessage({ id: "ssh.assetInstallMode" })}
+              </label>
+              <div className="inline-flex w-full max-w-md flex-col items-stretch rounded-lg border border-input-border bg-input p-[3px] sm:w-fit sm:flex-row sm:items-center">
+                {ENABLED_ASSET_INSTALL_MODES.map((value) => {
+                  const selected = assetInstallMode === value;
 
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setAssetInstallMode(value)}
-                    className={cn(
-                      "inline-flex min-h-7 min-w-0 flex-1 items-center justify-center rounded-md px-3 py-1 text-center text-ui-base font-medium transition-colors sm:flex-none",
-                      selected
-                        ? "bg-background text-foreground"
-                        : "text-foreground-subtle hover:text-foreground",
-                    )}
-                  >
-                    <span className="min-w-0 break-words">
-                      {intl.formatMessage({
-                        id: `ssh.assetInstallMode.${value}`,
-                      })}
-                    </span>
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setAssetInstallMode(value)}
+                      className={cn(
+                        "inline-flex min-h-7 min-w-0 flex-1 items-center justify-center rounded-md px-3 py-1 text-center text-ui-base font-medium transition-colors sm:flex-none",
+                        selected
+                          ? "bg-background text-foreground"
+                          : "text-foreground-subtle hover:text-foreground",
+                      )}
+                    >
+                      <span className="min-w-0 break-words">
+                        {intl.formatMessage({
+                          id: `ssh.assetInstallMode.${value}`,
+                        })}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-ui-base text-foreground-subtle">
+                {intl.formatMessage({ id: "ssh.assetInstallModeDescription" })}
+              </p>
             </div>
-            <p className="mt-1 text-ui-base text-foreground-subtle">
-              {intl.formatMessage({ id: "ssh.assetInstallModeDescription" })}
-            </p>
-          </div>
+          ) : null}
         </div>
       );
     case "wsl":

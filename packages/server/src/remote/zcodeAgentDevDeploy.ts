@@ -1,5 +1,9 @@
 /* eslint-disable max-lines -- 开发态 agent 部署包含本地打包、远端 owner staging 与 wrapper 安装，后续独立拆分上传事务。 */
-import { ZCODE_AGENT_PROVIDER, resolveZCodeRuntimeEnv } from "@zcode/shared";
+import {
+  ZCODE_AGENT_PROVIDER,
+  ZCODE_FORK_ENABLE_REMOTE_ASSET_DOWNLOAD,
+  resolveZCodeRuntimeEnv,
+} from "@zcode/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { cp, lstat, mkdir, mkdtemp, readdir, readFile, readlink, rm } from "node:fs/promises";
@@ -66,6 +70,17 @@ function findUpward(relativePath: string): { rootDir: string; path: string } | n
 }
 
 function shouldUseDevelopmentAgentBundle(): boolean {
+  // fork 策略：远端资源下载已关闭时，始终使用本地 bundled agent，不走 CDN。
+  // 否则打包版会从官方 CDN 拉官方 agent，静默覆盖 fork 的隐私补丁（2026-09-26 实测发生过）。
+  // 上游的 ZCODE_REMOTE_DEV_AGENT_BUNDLE=0 显式关闭仍可覆盖此行为。
+  if (!ZCODE_FORK_ENABLE_REMOTE_ASSET_DOWNLOAD) {
+    const explicitOff = process.env[DEV_AGENT_BUNDLE_ENV]?.trim().toLowerCase();
+    if (explicitOff === "0" || explicitOff === "false") {
+      return false;
+    }
+    return true;
+  }
+
   if (resolveZCodeRuntimeEnv(process.env) !== "development") {
     return false;
   }
@@ -82,26 +97,63 @@ function shouldUseDevelopmentAgentBundle(): boolean {
   return !process.env.VITEST;
 }
 
-function resolveDevelopmentAgentBundle(): {
+interface DevelopmentAgentBundle {
   repoRoot: string;
   localBundlePath: string;
-} | null {
+  /** 插件包的基目录。dev 态为 repoRoot/apps/zcode-cli/packages；打包态为 resourcesPath/glm/packages。 */
+  pluginBaseDir: string;
+}
+
+/** 打包版：bundled-agents 由 electron-builder 放在 Resources/glm/，含 zcode.cjs + packages/。 */
+function resolvePackagedAgentBundle(): DevelopmentAgentBundle | null {
+  // process.resourcesPath 是 Electron 特有属性，标准 Node 类型没有；用结构化断言而不是 any。
+  const resourcesPath = (process as { resourcesPath?: string }).resourcesPath;
+  if (!resourcesPath) {
+    return null;
+  }
+  const zcodePath = join(resourcesPath, "glm", "zcode.cjs");
+  if (!existsSync(zcodePath)) {
+    return null;
+  }
+  const pluginsDir = join(resourcesPath, "glm", "packages");
+  if (!existsSync(pluginsDir)) {
+    return null;
+  }
+  // repoRoot 不再用于推导插件路径（打包版结构不同），保留字段以兼容接口。
+  return { repoRoot: resourcesPath, localBundlePath: zcodePath, pluginBaseDir: pluginsDir };
+}
+
+function resolveDevelopmentAgentBundle(): DevelopmentAgentBundle | null {
   if (!shouldUseDevelopmentAgentBundle()) {
     return null;
   }
+
+  // 打包版优先从 extraResources 取 bundled agent（fork 策略：生产版也不走 CDN）。
+  const packaged = resolvePackagedAgentBundle();
+  if (packaged) {
+    return packaged;
+  }
+
+  // 开发态从仓库 findUpward。
   const found = findUpward(DEV_AGENT_BUNDLE_RELATIVE_PATH);
-  return found ? { repoRoot: found.rootDir, localBundlePath: found.path } : null;
+  return found
+    ? {
+        repoRoot: found.rootDir,
+        localBundlePath: found.path,
+        pluginBaseDir: join(found.rootDir, "apps", "zcode-cli", "packages"),
+      }
+    : null;
 }
 
 async function computeDevelopmentAgentAssetsSha256(params: {
   localBundlePath: string;
-  repoRoot: string;
+  pluginBaseDir: string;
 }): Promise<string> {
   const hash = createHash("sha256");
   hash.update("bundle:zcode.cjs\n");
   hash.update(await readFile(params.localBundlePath));
   for (const packageName of REMOTE_AGENT_OFFICIAL_PLUGIN_PACKAGE_NAMES) {
-    const packageRoot = join(params.repoRoot, "apps", "zcode-cli", "packages", packageName);
+    const packageRoot = join(params.pluginBaseDir, packageName);
     hash.update(`plugin:${packageName}\n`);
     await hashDevelopmentOfficialPluginPackage(hash, packageRoot, packageName);
   }
@@ -245,12 +297,12 @@ async function shouldSkipDevelopmentZCodeAgentDeploy(params: {
 }
 
 async function stageDevelopmentOfficialPluginPackages(params: {
-  repoRoot: string;
+  pluginBaseDir: string;
   packagesDir: string;
 }): Promise<void> {
   await mkdir(params.packagesDir, { recursive: true });
   for (const packageName of REMOTE_AGENT_OFFICIAL_PLUGIN_PACKAGE_NAMES) {
-    const sourceRoot = join(params.repoRoot, "apps", "zcode-cli", "packages", packageName);
+    const sourceRoot = join(params.pluginBaseDir, packageName);
     const manifestPath = join(sourceRoot, ".zcode-plugin", "plugin.json");
     if (!existsSync(manifestPath)) {
       throw new Error(`[zcode-agent-deploy] missing official plugin manifest: ${manifestPath}`);
@@ -272,7 +324,7 @@ async function stageDevelopmentOfficialPluginPackages(params: {
 
 async function uploadDevelopmentOfficialPluginPackages(params: {
   backend: IRemoteBackend;
-  repoRoot: string;
+  pluginBaseDir: string;
   remoteProviderDir: string;
   loggers: DeployLoggers;
 }): Promise<void> {
@@ -281,7 +333,7 @@ async function uploadDevelopmentOfficialPluginPackages(params: {
   const archivePath = join(tempDir, `${REMOTE_AGENT_OFFICIAL_PLUGIN_DIR_NAME}.tar.gz`);
   try {
     await stageDevelopmentOfficialPluginPackages({
-      repoRoot: params.repoRoot,
+      pluginBaseDir: params.pluginBaseDir,
       packagesDir,
     });
     await createTarGzArchive(archivePath, [
@@ -359,7 +411,7 @@ export async function deployDevelopmentZCodeAgentRuntime(
   const remoteDevVersionFile = `${params.remoteProviderDir}/${REMOTE_DEV_AGENT_VERSION_FILE_NAME}`;
   const devVersion = await computeDevelopmentAgentAssetsSha256({
     localBundlePath: developmentBundle.localBundlePath,
-    repoRoot: developmentBundle.repoRoot,
+    pluginBaseDir: developmentBundle.pluginBaseDir,
   });
   const missingOfficialPluginAssetPaths = await findMissingRemoteOfficialPluginAssetPaths({
     backend,
@@ -402,7 +454,7 @@ export async function deployDevelopmentZCodeAgentRuntime(
   await waitForClose(bundleStream);
   await uploadDevelopmentOfficialPluginPackages({
     backend,
-    repoRoot: developmentBundle.repoRoot,
+    pluginBaseDir: developmentBundle.pluginBaseDir,
     remoteProviderDir: params.remoteProviderDir,
     loggers,
   });
